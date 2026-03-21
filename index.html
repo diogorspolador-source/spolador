@@ -319,6 +319,10 @@ body.light .chip.active{color:#fff}
     <span class="nav-icon">📚</span>
     <span>Praticar</span>
   </button>
+  <button class="nav-item" id="nav-dash" onclick="navTo('dashboard')">
+    <span class="nav-icon">📊</span>
+    <span>Stats</span>
+  </button>
   <button class="nav-item" id="nav-rank" onclick="navTo('leaderboard')">
     <span class="nav-icon">🏆</span>
     <span>Ranking</span>
@@ -439,8 +443,8 @@ function streakIcon(d){return d>=30?'🔥':d>=14?'⚡':d>=7?'✨':d>=3?'💪':'�
 // ═══════════════════════════════════════════════════════════════════
 // NAVEGAÇÃO
 // ═══════════════════════════════════════════════════════════════════
-const NAV_SCREENS = ['home','quiz-setup','leaderboard','perfil'];
-const NAV_IDS = ['nav-home','nav-quiz','nav-rank','nav-perfil'];
+const NAV_SCREENS = ['home','quiz-setup','dashboard','leaderboard','perfil'];
+const NAV_IDS = ['nav-home','nav-quiz','nav-dash','nav-rank','nav-perfil'];
 
 function go(scr){S.scr=scr;render();}
 function navTo(scr){
@@ -453,7 +457,7 @@ function renderNav(){
   $('nav-bar').style.display = showNav ? 'flex' : 'none';
   $('app').classList.toggle('no-nav', !showNav);
   NAV_IDS.forEach((id,i)=>$(id)?.classList.toggle('active', S.scr===NAV_SCREENS[i]||
-    (S.scr==='amigos'&&i===3)||(S.scr==='clan'&&i===3)||(S.scr==='dash'&&i===0)));
+    (S.scr==='amigos'&&i===4)||(S.scr==='clan'&&i===4)||(S.scr==='dash'&&i===0)));
   // Avatar na nav
   const wrap = $('nav-avatar-wrap');
   if(wrap && PERFIL){
@@ -469,6 +473,7 @@ function render(){
     'quiz-setup': renderQuizSetup,
     quiz: renderQuiz,
     dash: renderDash,
+    dashboard: renderDashboard,
     perfil: renderPerfil,
     amigos: renderAmigos,
     leaderboard: renderLeaderboard,
@@ -1939,6 +1944,199 @@ async function getLeaderboardAmigos(){
   ids.push(USER?.id);
   const {data}=await sb.from('usuarios').select('id,nome,avatar_url,foto_url,xp,streak_dias').in('id',ids).order('xp',{ascending:false});
   return(data||[]).map((u,i)=>({...u,foto:u.foto_url||u.avatar_url,posicao:i+1}));
+}
+
+
+// ═══════════════════════════════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════════════════════════════
+function renderDashboard(){
+  const gs = getGS();
+  const xp = getXP();
+  const lvl = getLvl();
+  const nextLvl = NIVEIS.find(n=>n.min>xp);
+  const pLvl = nextLvl ? Math.round((xp-lvl.min)/(nextLvl.min-lvl.min)*100) : 100;
+  const streak = PERFIL?.streak_dias || 0;
+  const recorde = PERFIL?.streak_recorde || 0;
+  const criado = PERFIL?.criado_em ? new Date(PERFIL.criado_em) : null;
+  const diasCadastrado = criado ? Math.floor((Date.now()-criado.getTime())/86400000) : 0;
+
+  // Stats por tópico
+  const porTopico = TOPICOS_LIST.map(t=>{
+    const qs = BANCO.filter(q=>q.topic===t);
+    let ok=0, no=0;
+    qs.forEach(q=>{
+      const a=S.ans[q.id];
+      if(a===q.ans) ok++;
+      else if(a) no++;
+    });
+    const feitas=ok+no;
+    const pct=feitas>0?Math.round(ok/feitas*100):null;
+    return {t, ok, no, feitas, tot:qs.length, pct};
+  });
+
+  // Pontos fortes e fracos
+  const comDados = porTopico.filter(x=>x.feitas>=3);
+  const maisForte = comDados.length ? [...comDados].sort((a,b)=>b.pct-a.pct)[0] : null;
+  const maisFraco = comDados.length ? [...comDados].sort((a,b)=>a.pct-b.pct)[0] : null;
+
+  // Questões feitas hoje (aproximação — via sessionAns)
+  const totalRespondidas = Object.keys(S.ans).length;
+
+  // Gráfico de barras por tópico (SVG inline)
+  function barChart(){
+    if(porTopico.every(x=>x.feitas===0)) return `
+      <div style="text-align:center;padding:32px 0;color:var(--text3);font-size:14px">
+        Responda algumas questões para ver seu desempenho por assunto
+      </div>`;
+
+    return porTopico.map(x=>{
+      const info = TC[x.t]||{cor:'var(--green)',icon:'📌'};
+      const pctOk = x.tot>0?Math.round(x.ok/x.tot*100):0;
+      const pctNo = x.tot>0?Math.round(x.no/x.tot*100):0;
+      const pctVazia = 100-pctOk-pctNo;
+      return `
+      <div style="margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="font-size:13px;font-weight:700">${info.icon} ${x.t}</span>
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:11px;color:var(--text3);font-family:var(--mono)">${x.feitas}/${x.tot}</span>
+            ${x.pct!==null?`<span style="font-family:var(--mono);font-size:13px;font-weight:800;color:${pctCor(x.pct)}">${x.pct}%</span>`:'<span style="font-size:11px;color:var(--text3)">—</span>'}
+          </div>
+        </div>
+        <div style="height:10px;border-radius:5px;background:var(--bg3);overflow:hidden;display:flex">
+          <div style="width:${pctOk}%;background:var(--green);transition:width .6s ease"></div>
+          <div style="width:${pctNo}%;background:var(--red);transition:width .6s ease"></div>
+          <div style="width:${pctVazia}%;background:transparent"></div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  $('app').innerHTML=`
+<div style="background:var(--bg);min-height:100vh">
+
+  <!-- Header -->
+  <div class="glass page-header">
+    <div style="font-size:16px;font-weight:800">📊 Estatísticas</div>
+    <button onclick="toggleTema()" style="background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:7px 10px;font-size:15px">
+      ${document.body.classList.contains('light')?'🌙':'☀️'}
+    </button>
+  </div>
+
+  <div style="padding:20px;max-width:480px;margin:0 auto">
+
+    <!-- Nível e XP -->
+    <div class="card fade-up" style="padding:20px;margin-bottom:14px;display:flex;align-items:center;gap:16px">
+      <div style="font-size:48px;flex-shrink:0">${lvl.icon}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:3px">Seu nível</div>
+        <div style="font-family:var(--display);font-size:22px;font-weight:800;color:${lvl.color};margin-bottom:8px">${lvl.name}</div>
+        <div class="prog-track"><div class="prog-fill" style="width:${pLvl}%;background:${lvl.color}"></div></div>
+        <div style="display:flex;justify-content:space-between;margin-top:5px">
+          <span style="font-family:var(--mono);font-size:12px;font-weight:700">${xp} XP</span>
+          ${nextLvl?`<span style="font-size:11px;color:var(--text3)">faltam ${nextLvl.min-xp} XP para ${nextLvl.icon}</span>`:'<span style="font-size:11px;color:var(--green)">Nível máximo!</span>'}
+        </div>
+      </div>
+    </div>
+
+    <!-- Grid de métricas -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+
+      <!-- Streak -->
+      <div class="card fade-up" style="padding:18px">
+        <div style="font-size:32px;margin-bottom:6px">${streakIcon(streak)}</div>
+        <div style="font-family:var(--mono);font-size:28px;font-weight:900;color:var(--yellow);line-height:1">${streak}</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:4px;font-weight:600">dias seguidos</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">
+          Recorde: <span style="font-family:var(--mono);font-weight:700;color:var(--text2)">${recorde}d</span>
+        </div>
+      </div>
+
+      <!-- Dias praticando -->
+      <div class="card fade-up" style="padding:18px">
+        <div style="font-size:32px;margin-bottom:6px">📅</div>
+        <div style="font-family:var(--mono);font-size:28px;font-weight:900;color:var(--blue);line-height:1">${diasCadastrado}</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:4px;font-weight:600">dias na plataforma</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">
+          desde ${criado?criado.toLocaleDateString('pt-BR',{month:'short',year:'numeric'}):'—'}
+        </div>
+      </div>
+
+      <!-- Total de acertos -->
+      <div class="card fade-up" style="padding:18px">
+        <div style="font-size:32px;margin-bottom:6px">✅</div>
+        <div style="font-family:var(--mono);font-size:28px;font-weight:900;color:var(--green);line-height:1">${gs.ok}</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:4px;font-weight:600">acertos</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">
+          de ${totalRespondidas} respondidas
+        </div>
+      </div>
+
+      <!-- Taxa de acerto -->
+      <div class="card fade-up" style="padding:18px">
+        <div style="font-size:32px;margin-bottom:6px">${gs.pct>=70?'🎯':gs.pct>=50?'📈':'💪'}</div>
+        <div style="font-family:var(--mono);font-size:28px;font-weight:900;color:${pctCor(gs.pct)};line-height:1">${gs.pct}%</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:4px;font-weight:600">taxa de acerto</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">
+          ${gs.pct>=70?'Excelente desempenho!':gs.pct>=50?'Bom progresso!':'Continue praticando!'}
+        </div>
+      </div>
+    </div>
+
+    <!-- Ponto forte e fraco -->
+    ${maisForte||maisFraco?`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+      ${maisForte?`
+      <div class="card fade-up" style="padding:16px;border:1.5px solid var(--green-border)">
+        <div style="font-size:10px;font-weight:800;color:var(--green);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">💪 Ponto forte</div>
+        <div style="font-size:13px;font-weight:700;margin-bottom:4px">${TC[maisForte.t]?.icon} ${maisForte.t}</div>
+        <div style="font-family:var(--mono);font-size:20px;font-weight:900;color:var(--green)">${maisForte.pct}%</div>
+      </div>`:''}
+      ${maisFraco?`
+      <div class="card fade-up" style="padding:16px;border:1.5px solid var(--red-border)">
+        <div style="font-size:10px;font-weight:800;color:var(--red);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">🎯 Trabalhar mais</div>
+        <div style="font-size:13px;font-weight:700;margin-bottom:4px">${TC[maisFraco.t]?.icon} ${maisFraco.t}</div>
+        <div style="font-family:var(--mono);font-size:20px;font-weight:900;color:var(--red)">${maisFraco.pct}%</div>
+      </div>`:''}
+    </div>`:``}
+
+    <!-- Desempenho por assunto -->
+    <div class="card fade-up" style="padding:20px;margin-bottom:14px">
+      <div style="font-size:13px;font-weight:800;margin-bottom:4px">Desempenho por assunto</div>
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;border-radius:3px;background:var(--green)"></div><span style="font-size:11px;color:var(--text3)">Acertos</span></div>
+        <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;border-radius:3px;background:var(--red)"></div><span style="font-size:11px;color:var(--text3)">Erros</span></div>
+        <div style="display:flex;align-items:center;gap:5px"><div style="width:10px;height:10px;border-radius:3px;background:var(--bg3)"></div><span style="font-size:11px;color:var(--text3)">Não feitas</span></div>
+      </div>
+      ${barChart()}
+    </div>
+
+    <!-- Resumo numérico -->
+    <div class="card fade-up" style="padding:20px;margin-bottom:14px">
+      <div style="font-size:13px;font-weight:800;margin-bottom:14px">Resumo geral</div>
+      ${[
+        ['Total de questões',  BANCO.length.toLocaleString('pt-BR'), 'var(--text2)'],
+        ['Respondidas',        totalRespondidas.toLocaleString('pt-BR'), 'var(--text2)'],
+        ['Não respondidas',    gs.na.toLocaleString('pt-BR'), 'var(--text3)'],
+        ['Acertos',            gs.ok.toLocaleString('pt-BR'), 'var(--green)'],
+        ['Erros',              gs.no.toLocaleString('pt-BR'), 'var(--red)'],
+        ['XP total',           xp.toLocaleString('pt-BR')+' XP', 'var(--yellow)'],
+      ].map(([label,valor,cor])=>`
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
+        <span style="font-size:14px;color:var(--text2)">${label}</span>
+        <span style="font-family:var(--mono);font-size:14px;font-weight:800;color:${cor}">${valor}</span>
+      </div>`).join('')}
+    </div>
+
+    <!-- CTA -->
+    ${gs.na>0?`
+    <button onclick="navTo('quiz-setup')" class="btn-primary" style="padding:16px;font-size:16px">
+      ${maisFraco?`Praticar ${TC[maisFraco.t]?.icon} ${maisFraco.t} →`:'Continuar estudando →'}
+    </button>`:``}
+
+  </div>
+</div>`;
 }
 
 // ═══════════════════════════════════════════════════════════════════
