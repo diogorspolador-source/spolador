@@ -3170,48 +3170,49 @@ function renderFlashcards(step,lic){
   const total=step.cards.length;
   return`
 <div class="fade-up">
-  <div style="font-size:20px;font-weight:900;margin-bottom:6px">${step.titulo}</div>
-  <div style="font-size:11px;font-family:var(--mono);color:var(--text3);margin-bottom:24px">Card ${idx+1} de ${total}</div>
+  <div style="font-size:20px;font-weight:900;margin-bottom:4px">${step.titulo}</div>
+  <div style="font-size:11px;font-family:var(--mono);color:var(--text3);margin-bottom:22px">Card ${idx+1} de ${total}</div>
 
-  <!-- Card flip -->
-  <div onclick="fcVirar()" style="
-    min-height:200px;padding:32px 24px;
-    background:${virado?lic.cor+'18':'var(--bg2)'};
-    border:2.5px solid ${virado?lic.cor:'var(--border2)'};
-    border-radius:24px;cursor:pointer;
-    display:flex;flex-direction:column;align-items:center;justify-content:center;
-    text-align:center;transition:all .3s;margin-bottom:20px;
-    box-shadow:${virado?'0 8px 32px '+lic.cor+'22':'none'};
-  ">
-    <div style="font-size:10px;font-weight:800;color:${virado?lic.cor:'var(--text3)'};text-transform:uppercase;letter-spacing:.12em;margin-bottom:14px">
-      ${virado?'RESPOSTA':'PERGUNTA · Toque para revelar'}
-    </div>
-    <div style="font-size:${virado?17:18}px;font-weight:700;line-height:1.55;color:var(--text)">
-      ${virado?card.v:card.f}
-    </div>
-    ${!virado?`<div style="font-size:28px;margin-top:16px;opacity:.3">👆</div>`:''}
+  <!-- Pergunta sempre visível -->
+  <div style="padding:20px;background:var(--bg2);border:2px solid var(--border2);border-radius:18px;margin-bottom:14px">
+    <div style="font-size:10px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px">Pergunta</div>
+    <p style="font-size:16px;font-weight:700;line-height:1.6;margin:0">${card.f}</p>
   </div>
 
-  <!-- Dots -->
-  <div style="display:flex;justify-content:center;gap:8px;margin-bottom:24px">
-    ${step.cards.map((_,i)=>`<div style="width:8px;height:8px;border-radius:50%;background:${i===idx?lic.cor:'var(--border2)'};transition:background .2s"></div>`).join('')}
+  <!-- Resposta: oculta até revelar -->
+  ${!virado?`
+  <button onclick="fcVirar()" style="
+    width:100%;padding:16px;border-radius:16px;
+    background:transparent;border:2px dashed var(--border2);
+    color:var(--text3);font-size:14px;font-weight:700;
+    cursor:pointer;font-family:var(--sans);
+    display:flex;align-items:center;justify-content:center;gap:8px;
+    margin-bottom:14px;transition:all .2s;
+  " onmouseover="this.style.borderColor='${lic.cor}';this.style.color='${lic.cor}'"
+     onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--text3)'">
+    👁 Ver resposta
+  </button>`:`
+  <div class="fade-up" style="padding:20px;background:${lic.cor}15;border:2px solid ${lic.cor}44;border-radius:18px;margin-bottom:16px">
+    <div style="font-size:10px;font-weight:800;color:${lic.cor};text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px">Resposta</div>
+    <p style="font-size:16px;font-weight:700;line-height:1.6;margin:0;color:var(--text)">${card.v}</p>
   </div>
-
-  <!-- Ações após virar -->
-  ${virado?`
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
     <button onclick="fcAvancar(${total},false)" style="
-      padding:16px;border-radius:16px;
+      padding:15px;border-radius:16px;
       background:var(--red-bg);border:2px solid var(--red-border);
       color:var(--red);font-size:14px;font-weight:800;cursor:pointer;font-family:var(--sans);
     ">😅 Não sabia</button>
     <button onclick="fcAvancar(${total},true)" style="
-      padding:16px;border-radius:16px;
+      padding:15px;border-radius:16px;
       background:var(--green-bg);border:2px solid var(--green-border);
       color:var(--green);font-size:14px;font-weight:800;cursor:pointer;font-family:var(--sans);
     ">🎉 Sabia!</button>
-  </div>`:`
-  <div style="text-align:center;font-size:13px;color:var(--text3)">Toque no card para ver a resposta</div>`}
+  </div>`}
+
+  <!-- Dots indicadores -->
+  <div style="display:flex;justify-content:center;gap:8px;margin-top:4px">
+    ${step.cards.map((_,i)=>`<div style="width:8px;height:8px;border-radius:50%;background:${i===idx?lic.cor:'var(--border2)'};transition:background .2s"></div>`).join('')}
+  </div>
 </div>`;}
 
 // ── Ações dos interativos ──────────────────────────────────────────
@@ -3271,7 +3272,7 @@ function renderFixacao(lic,qIdx,totalEtapas){
     <div style="font-family:var(--mono);font-size:11px;color:var(--text3);font-weight:700">Fixação ${qIdx+1}/${LS_licao.fixQs.length}</div>
   </div>
 
-  <div style="flex:1;overflow-y:auto;padding:8px 20px 24px;max-width:540px;width:100%;margin:0 auto">
+  <div style="overflow-y:auto;padding:8px 20px 32px;max-width:540px;width:100%;margin:0 auto">
 
     <!-- Badge de fixação -->
     <div style="display:inline-flex;align-items:center;gap:7px;padding:6px 14px;border-radius:50px;background:${lic.cor}18;border:1.5px solid ${lic.cor}44;font-size:11px;font-weight:800;color:${lic.cor};text-transform:uppercase;letter-spacing:.08em;margin-bottom:16px">
@@ -3281,7 +3282,7 @@ function renderFixacao(lic,qIdx,totalEtapas){
     <!-- Enunciado -->
     <div style="padding:20px;background:var(--bg2);border:2px solid var(--border2);border-radius:18px;margin-bottom:18px">
       <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">${esc(q.src)} · ${q.banca}</div>
-      <p style="font-size:15px;line-height:1.8;white-space:pre-wrap;margin:0">${esc(q.text)}</p>
+      <p style="font-size:${q.text.length>300?'13':'15'}px;line-height:1.75;white-space:pre-wrap;margin:0">${esc(q.text)}</p>
     </div>
 
     <!-- Alternativas -->
@@ -3312,21 +3313,20 @@ function renderFixacao(lic,qIdx,totalEtapas){
     </div>
 
     <!-- Feedback -->
+    <!-- Feedback -->
     ${conf?`
-    <div class="fade-up" style="padding:15px;border-radius:14px;background:${isOk?'var(--green-bg)':'var(--red-bg)'};border:1.5px solid ${isOk?'var(--green-border)':'var(--red-border)'};margin-bottom:14px">
-      <div style="font-size:14px;font-weight:800;color:${isOk?'var(--green)':'var(--red)'};margin-bottom:6px">${isOk?'✅ Correto! +10 XP':'❌ Gabarito: '+q.ans+') '+(correto?.t?.substring(0,50)||'')}</div>
+    <div class="fade-up" style="padding:15px;border-radius:14px;background:${isOk?'var(--green-bg)':'var(--red-bg)'};border:1.5px solid ${isOk?'var(--green-border)':'var(--red-border)'};margin-bottom:16px">
+      <div style="font-size:14px;font-weight:800;color:${isOk?'var(--green)':'var(--red)'};margin-bottom:6px">${isOk?'✅ Correto! +10 XP':'❌ Gabarito: '+q.ans+') '+(correto?.t?.substring(0,60)||'')}</div>
       ${q.exp?.ok?`<p style="font-size:13px;color:var(--text2);line-height:1.65;margin:0">${esc(q.exp.ok)}</p>`:''}
-    </div>
-    <div style="height:80px"></div>`:`
-    <div style="height:80px"></div>`}
-  </div>
+    </div>`:``}
 
-  <!-- Botão fixo no rodapé -->
-  <div style="position:fixed;bottom:0;left:0;right:0;padding:16px 20px;border-top:1px solid var(--border);background:var(--bg)">
+    <!-- Botão sempre inline — nunca some atrás do conteúdo -->
     ${!conf?`
     <button onclick="fixConfirmar()" ${!sel?'disabled':''} class="btn-primary" style="padding:17px;font-size:16px;opacity:${sel?1:.4}">
       Confirmar resposta
-    </button>`:`
+    </button>
+    ${!sel?`<p style="text-align:center;font-size:12px;color:var(--text3);margin-top:10px">↑ Selecione uma alternativa</p>`:''}
+    `:`
     <button onclick="fixAvancar(${qIdx})" class="btn-primary" style="padding:17px;font-size:16px;background:${lic.cor}">
       ${qIdx<LS_licao.fixQs.length-1?'Próxima questão →':'Ver resultado →'}
     </button>`}
