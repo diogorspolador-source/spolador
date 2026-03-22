@@ -319,6 +319,10 @@ body.light .chip.active{color:#fff}
     <span class="nav-icon">📚</span>
     <span>Praticar</span>
   </button>
+  <button class="nav-item" id="nav-learn" onclick="navTo('aprender')">
+    <span class="nav-icon">🎓</span>
+    <span>Aprender</span>
+  </button>
   <button class="nav-item" id="nav-dash" onclick="navTo('dashboard')">
     <span class="nav-icon">📊</span>
     <span>Stats</span>
@@ -395,6 +399,9 @@ let S = {
   timerSec:0, timerInterval:null, timerAtivo:false,
   // leaderboard
   lbAba: 'geral',
+  // aprender
+  licaoAtual: null, licaoEtapa: 0, licaoFlashcard: 0, licaoFlipped: false,
+  licaoQuestoes: [], licaoQIdx: 0, licaoSel: null, licaoConf: false, licaoErros: [],
   // cache
   ans:{}, favs:{},
 };
@@ -443,8 +450,8 @@ function streakIcon(d){return d>=30?'🔥':d>=14?'⚡':d>=7?'✨':d>=3?'💪':'�
 // ═══════════════════════════════════════════════════════════════════
 // NAVEGAÇÃO
 // ═══════════════════════════════════════════════════════════════════
-const NAV_SCREENS = ['home','quiz-setup','dashboard','leaderboard','perfil'];
-const NAV_IDS = ['nav-home','nav-quiz','nav-dash','nav-rank','nav-perfil'];
+const NAV_SCREENS = ['home','quiz-setup','aprender','dashboard','leaderboard','perfil'];
+const NAV_IDS = ['nav-home','nav-quiz','nav-learn','nav-dash','nav-rank','nav-perfil'];
 
 function go(scr){S.scr=scr;render();}
 function navTo(scr){
@@ -470,6 +477,8 @@ function render(){
   const screens = {
     login: renderLogin,
     home: renderHome,
+    aprender: renderAprender,
+    licao: renderLicao,
     'quiz-setup': renderQuizSetup,
     quiz: renderQuiz,
     dash: renderDash,
@@ -2192,3 +2201,902 @@ boot();
 </script>
 </body>
 </html>
+<script>
+// ═══════════════════════════════════════════════════════════════════
+// DADOS DAS LIÇÕES
+// ═══════════════════════════════════════════════════════════════════
+const LICOES = {
+  "Proposições e Operadores": {
+    emoji:"💬", cor:"#ff6d00",
+    steps:[
+      {tipo:"intro", titulo:"O que é uma Proposição?",
+       texto:"Uma <strong>proposição</strong> é qualquer sentença declarativa que pode ser verdadeira (V) ou falsa (F) — nunca os dois ao mesmo tempo.",
+       ok:["O Brasil tem 26 estados.","2 + 2 = 5.","A Lua é satélite natural da Terra."],
+       nao:["Que horas são? (pergunta)","Feche a porta! (ordem)","Tomara que chova! (desejo)"]},
+      {tipo:"conectivos", titulo:"Os 5 Conectivos Lógicos",
+       items:[
+         {s:"~",n:"NÃO",ex:"~p",r:"Inverte o valor de p"},
+         {s:"∧",n:"E",ex:"p ∧ q",r:"V somente quando as duas são V"},
+         {s:"∨",n:"OU",ex:"p ∨ q",r:"F somente quando as duas são F"},
+         {s:"→",n:"SE...ENTÃO",ex:"p → q",r:"F somente quando V → F"},
+         {s:"↔",n:"SE E SOMENTE SE",ex:"p ↔ q",r:"V quando p e q têm mesmo valor"},
+       ]},
+      {tipo:"interativo", titulo:"É proposição ou não?",
+       perguntas:[
+         {frase:"O número 7 é primo.",resp:true,exp:"Sentença declarativa com valor V — é proposição."},
+         {frase:"Abra a janela!",resp:false,exp:"É uma ordem — não tem valor V ou F."},
+         {frase:"Existe vida em Marte.",resp:true,exp:"Pode ser V ou F — é proposição (mesmo sem saber a resposta)."},
+         {frase:"Quem chegou primeiro?",resp:false,exp:"É uma pergunta — não é proposição."},
+       ]},
+      {tipo:"flashcards", titulo:"Revise as regras",
+       cards:[
+         {f:"p → q: quando é FALSO?",v:"Somente quando p é V e q é F"},
+         {f:"p ∧ q: quando é VERDADEIRO?",v:"Somente quando p é V E q é V"},
+         {f:"Interrogativas são proposições?",v:"NÃO. Apenas sentenças declarativas."},
+         {f:"p ∨ q: quando é FALSO?",v:"Somente quando p é F e q é F"},
+       ]},
+    ]
+  },
+  "Equivalência e Negação": {
+    emoji:"🔁", cor:"#00e676",
+    steps:[
+      {tipo:"intro", titulo:"Equivalências Fundamentais",
+       texto:"Duas proposições são <strong>equivalentes (≡)</strong> quando têm o mesmo valor lógico em todas as situações. Dominar as equivalências permite transformar proposições complexas em formas mais simples."},
+      {tipo:"regras", titulo:"As 5 Equivalências que mais caem",
+       items:[
+         {t:"De Morgan 1",f:"~(p ∧ q) ≡ ~p ∨ ~q",d:"Negou o E → vira OU e nega cada um"},
+         {t:"De Morgan 2",f:"~(p ∨ q) ≡ ~p ∧ ~q",d:"Negou o OU → vira E e nega cada um"},
+         {t:"Negação da Condicional",f:"~(p → q) ≡ p ∧ ~q",d:"Mantém p e nega q"},
+         {t:"Contrapositiva",f:"p → q ≡ ~q → ~p",d:"Inverte e nega os dois lados"},
+         {t:"Dupla Negação",f:"~~p ≡ p",d:"Negar duas vezes volta ao original"},
+       ]},
+      {tipo:"interativo", titulo:"Qual é a negação correta?",
+       perguntas:[
+         {frase:"~(p ∧ q)",opts:["~p ∧ ~q","~p ∨ ~q","p ∨ q"],corr:1,exp:"De Morgan: nega o E, vira OU e nega cada parte."},
+         {frase:"~(p → q)",opts:["~p → ~q","p ∧ ~q","~p ∨ q"],corr:1,exp:"Negação da condicional: mantém p e nega q."},
+         {frase:"Contrapositiva de p → q",opts:["q → p","~p → ~q","~q → ~p"],corr:2,exp:"Contrapositiva: inverte e nega os dois lados."},
+       ]},
+      {tipo:"flashcards", titulo:"Fixe as equivalências",
+       cards:[
+         {f:"Como negar p ∧ q?",v:"~p ∨ ~q (De Morgan 1)"},
+         {f:"Como negar p → q?",v:"p ∧ ~q"},
+         {f:"Contrapositiva de p → q?",v:"~q → ~p"},
+         {f:"Como negar p ∨ q?",v:"~p ∧ ~q (De Morgan 2)"},
+       ]},
+    ]
+  },
+  "Tabela-Verdade e Tautologia": {
+    emoji:"📊", cor:"#40c4ff",
+    steps:[
+      {tipo:"intro", titulo:"Tabela-Verdade",
+       texto:"A <strong>tabela-verdade</strong> lista todos os valores possíveis de uma proposição. Para <strong>n variáveis</strong>, a tabela tem <strong>2ⁿ linhas</strong>. Com 1 variável = 2 linhas. Com 2 = 4 linhas. Com 3 = 8 linhas."},
+      {tipo:"tabela_condicional", titulo:"A Condicional na Tabela-Verdade"},
+      {tipo:"conceitos", titulo:"Tautologia, Contradição e Contingência",
+       items:[
+         {n:"Tautologia",e:"✅",d:"SEMPRE verdadeira em todas as linhas",ex:"p ∨ ~p",cor:"#00e676"},
+         {n:"Contradição",e:"❌",d:"SEMPRE falsa em todas as linhas",ex:"p ∧ ~p",cor:"#ff5252"},
+         {n:"Contingência",e:"🔄",d:"Pode ser V ou F dependendo dos valores",ex:"p → q",cor:"#ffd740"},
+       ]},
+      {tipo:"flashcards", titulo:"Revise",
+       cards:[
+         {f:"2 variáveis → quantas linhas?",v:"2² = 4 linhas"},
+         {f:"3 variáveis → quantas linhas?",v:"2³ = 8 linhas"},
+         {f:"Quando p → q é FALSO?",v:"Somente quando p = V e q = F"},
+         {f:"p ∨ ~p é sempre...?",v:"Tautologia — sempre V"},
+       ]},
+    ]
+  },
+  "Quantificadores e Diagramas": {
+    emoji:"⭕", cor:"#e040fb",
+    steps:[
+      {tipo:"intro", titulo:"Quantificadores: Todo, Algum e Nenhum",
+       texto:"Os quantificadores indicam <strong>quantos elementos</strong> de um conjunto satisfazem uma condição. São a base dos problemas de diagramas de Euler-Venn."},
+      {tipo:"quantificadores", titulo:"Os Quantificadores e suas Negações",
+       items:[
+         {o:"Todo A é B",n:"Algum A não é B"},
+         {o:"Algum A é B",n:"Nenhum A é B"},
+         {o:"Nenhum A é B",n:"Algum A é B"},
+         {o:"Todo A não é B",n:"Algum A é B"},
+       ]},
+      {tipo:"interativo", titulo:"Qual é a negação?",
+       perguntas:[
+         {frase:"Todo estudante é aprovado.",opts:["Nenhum estudante é aprovado","Algum estudante não é aprovado","Todo estudante não é aprovado"],corr:1,exp:"A negação de 'Todo A é B' é 'Algum A não é B'."},
+         {frase:"Nenhum servidor é concursado.",opts:["Todo servidor é concursado","Algum servidor não é concursado","Algum servidor é concursado"],corr:2,exp:"A negação de 'Nenhum A é B' é 'Algum A é B'."},
+         {frase:"Algum candidato passou.",opts:["Nenhum candidato passou","Todo candidato passou","Algum candidato não passou"],corr:0,exp:"A negação de 'Algum A é B' é 'Nenhum A é B'."},
+       ]},
+      {tipo:"flashcards", titulo:"Grave as negações",
+       cards:[
+         {f:"Negação de 'Todo A é B'",v:"Algum A NÃO é B"},
+         {f:"Negação de 'Algum A é B'",v:"Nenhum A é B"},
+         {f:"Negação de 'Nenhum A é B'",v:"Algum A é B"},
+         {f:"'Todo A é B' no diagrama",v:"Círculo A completamente dentro do círculo B"},
+       ]},
+    ]
+  },
+  "Argumentos e Lógica": {
+    emoji:"⚖️", cor:"#ffd740",
+    steps:[
+      {tipo:"intro", titulo:"Argumentos Válidos",
+       texto:"Um <strong>argumento</strong> tem premissas e uma conclusão (∴). Um argumento é <strong>válido</strong> quando, se todas as premissas são V, a conclusão obrigatoriamente é V."},
+      {tipo:"formas", titulo:"As 5 Formas de Argumento Válido",
+       items:[
+         {n:"Modus Ponens",e:"⬆️",p:"p → q\np\n∴ q",ex:"Se estuda, passa. Estudou. ∴ Passou."},
+         {n:"Modus Tollens",e:"⬇️",p:"p → q\n~q\n∴ ~p",ex:"Se estuda, passa. Não passou. ∴ Não estudou."},
+         {n:"Silogismo Hipotético",e:"🔗",p:"p → q\nq → r\n∴ p → r",ex:"Se A então B. Se B então C. ∴ Se A então C."},
+         {n:"Adição",e:"➕",p:"p\n∴ p ∨ q",ex:"Chove. ∴ Chove ou faz sol."},
+         {n:"Simplificação",e:"✂️",p:"p ∧ q\n∴ p",ex:"Chove e faz frio. ∴ Chove."},
+       ]},
+      {tipo:"interativo", titulo:"Qual conclusão é válida?",
+       perguntas:[
+         {frase:"Premissas: 'Se p então q' e 'p é verdade'",opts:["q é verdade","~q é verdade","Nada se conclui"],corr:0,exp:"Modus Ponens: p→q e p, logo q."},
+         {frase:"Premissas: 'p → q' e '~q'",opts:["p é verdade","~p é verdade","q é verdade"],corr:1,exp:"Modus Tollens: p→q e ~q, logo ~p."},
+         {frase:"Premissas: 'A → B' e 'B → C'",opts:["A → B → C","A → C","C → A"],corr:1,exp:"Silogismo Hipotético: A→B e B→C, logo A→C."},
+       ]},
+      {tipo:"flashcards", titulo:"Fixe os argumentos",
+       cards:[
+         {f:"p→q e p. Conclusão?",v:"q (Modus Ponens)"},
+         {f:"p→q e ~q. Conclusão?",v:"~p (Modus Tollens)"},
+         {f:"p→q e q→r. Conclusão?",v:"p→r (Silogismo Hipotético)"},
+         {f:"p∧q. O que posso concluir?",v:"p (Simplificação) ou q (Simplificação)"},
+       ]},
+    ]
+  },
+  "Associação e Problemas": {
+    emoji:"🔗", cor:"#448aff",
+    steps:[
+      {tipo:"intro", titulo:"Como Resolver Problemas de Associação",
+       texto:"Problemas de associação testam raciocínio lógico aplicado. A chave é <strong>organizar as informações em uma grade</strong> e usar as restrições para eliminar possibilidades sistematicamente."},
+      {tipo:"passos", titulo:"O Método em 4 Passos",
+       items:[
+         {n:"1",t:"Leia tudo primeiro",d:"Leia TODAS as pistas antes de começar. Muitos erros acontecem por antecipar conclusões."},
+         {n:"2",t:"Monte a grade",d:"Crie uma tabela com as pessoas (linhas) e as características (colunas)."},
+         {n:"3",t:"Comece pela mais restritiva",d:"Use a pista que elimina mais possibilidades de uma vez."},
+         {n:"4",t:"Elimine por exclusão",d:"Quando uma posição é confirmada, elimine aquela opção de todos os outros."},
+       ]},
+      {tipo:"interativo", titulo:"Qual é a conclusão lógica?",
+       perguntas:[
+         {frase:"Ana, Bruno e Carlos têm profissões diferentes: médico, advogado e engenheiro. Ana não é médica. Bruno é engenheiro. Qual é a profissão de Ana?",opts:["Médica","Advogada","Engenheira"],corr:1,exp:"Bruno é engenheiro (eliminado). Ana não é médica. Então Ana é advogada, e Carlos é médico."},
+         {frase:"De 5 candidatos em fila, X está na frente de Y. W está atrás de Z. Z está na frente de X. Quem está mais à frente?",opts:["X","Y","Z","W"],corr:2,exp:"Z está na frente de X, que está na frente de Y. Logo Z é anterior a ambos."},
+       ]},
+      {tipo:"flashcards", titulo:"Estratégias-chave",
+       cards:[
+         {f:"Primeiro passo num problema de associação?",v:"Ler TODAS as pistas antes de começar."},
+         {f:"Qual pista usar primeiro?",v:"A mais restritiva — a que elimina mais possibilidades."},
+         {f:"O que fazer ao confirmar uma posição?",v:"Eliminar essa opção de todas as outras linhas/colunas."},
+         {f:"Como tratar informações negativas ('X não é Y')?",v:"Marcar como impossível na grade e seguir eliminando."},
+       ]},
+    ]
+  },
+  "Matemática Básica": {
+    emoji:"🔢", cor:"#69f0ae",
+    steps:[
+      {tipo:"intro", titulo:"Raciocínio Matemático em Concursos",
+       texto:"As questões de matemática em concursos focam em <strong>raciocínio</strong>, não em cálculos complexos. Os temas mais cobrados são: combinatória, probabilidade e porcentagem."},
+      {tipo:"formulas", titulo:"As Fórmulas Essenciais",
+       items:[
+         {n:"Combinação",f:"C(n,k) = n! ÷ (k! × (n-k)!)",q:"Ordem NÃO importa",ex:"Grupos, comissões, equipes"},
+         {n:"Arranjo",f:"A(n,k) = n! ÷ (n-k)!",q:"Ordem importa",ex:"Senhas, rankings, pódios"},
+         {n:"Permutação",f:"P(n) = n!",q:"Todos os elementos, ordem importa",ex:"Anagramas, filas"},
+         {n:"Probabilidade",f:"P = favoráveis ÷ possíveis",q:"Chance de um evento",ex:"Sorteios, cartas, dados"},
+         {n:"Porcentagem",f:"x% de N = (x÷100) × N",q:"Parte de um todo",ex:"Desconto, acréscimo, taxa"},
+       ]},
+      {tipo:"interativo", titulo:"Combinação ou Arranjo?",
+       perguntas:[
+         {frase:"Quantos grupos de 3 pessoas podem ser formados com 8 pessoas?",opts:["Combinação — ordem não importa","Arranjo — ordem importa"],corr:0,exp:"Grupos não têm ordem — usamos Combinação C(8,3) = 56."},
+         {frase:"De 10 números, quantas senhas de 4 dígitos diferentes existem?",opts:["Combinação — ordem não importa","Arranjo — ordem importa"],corr:1,exp:"Senhas têm ordem — 1234 ≠ 4321. Usamos Arranjo A(10,4)."},
+         {frase:"Um produto custa R$200 com 15% de desconto. Qual o preço final?",opts:["R$30","R$170","R$185"],corr:1,exp:"15% de 200 = 30. Preço final = 200 - 30 = R$170."},
+       ]},
+      {tipo:"flashcards", titulo:"Grave as fórmulas",
+       cards:[
+         {f:"Quando usar Combinação?",v:"Quando a ORDEM não importa (grupos, comissões)"},
+         {f:"Quando usar Arranjo?",v:"Quando a ORDEM importa (senhas, rankings)"},
+         {f:"Probabilidade de tirar cara numa moeda?",v:"P = 1/2 = 50% (1 favorável ÷ 2 possíveis)"},
+         {f:"20% de 500?",v:"(20÷100) × 500 = 100"},
+       ]},
+    ]
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// TELA: APRENDER (seleção de lição)
+// ═══════════════════════════════════════════════════════════════════
+function renderAprender(){
+  const TRILHA = [
+    {topico:"Proposições e Operadores",    nivel:"Básico",    seq:1,
+     descricao:"O ponto de partida. Entenda o que é uma proposição e como os conectivos funcionam."},
+    {topico:"Tabela-Verdade e Tautologia", nivel:"Básico",    seq:2,
+     descricao:"Aprenda a construir tabelas-verdade e identificar tautologias e contradições."},
+    {topico:"Equivalência e Negação",      nivel:"Intermediário", seq:3,
+     descricao:"De Morgan, negação da condicional e contrapositiva — os mais cobrados em prova."},
+    {topico:"Quantificadores e Diagramas", nivel:"Intermediário", seq:4,
+     descricao:"Todo, algum, nenhum. Como negar e usar diagramas de Euler-Venn."},
+    {topico:"Argumentos e Lógica",         nivel:"Intermediário", seq:5,
+     descricao:"Modus Ponens, Tollens, Silogismo. Como validar argumentos formais."},
+    {topico:"Associação e Problemas",      nivel:"Avançado",  seq:6,
+     descricao:"Resolução sistemática de problemas com grade de associação."},
+    {topico:"Matemática Básica",           nivel:"Avançado",  seq:7,
+     descricao:"Combinatória, probabilidade e porcentagem aplicados a concursos."},
+  ];
+
+  const COR_NIVEL = {
+    "Básico":        {bg:"#00e676", text:"#fff"},
+    "Intermediário": {bg:"#ffd740", text:"#000"},
+    "Avançado":      {bg:"#ff6d00", text:"#fff"},
+  };
+
+  // Calcula estado de cada etapa
+  function getStatus(topico){
+    const qs = BANCO.filter(q=>q.topic===topico);
+    const feitas = qs.filter(q=>S.ans[q.id]).length;
+    const acertos = qs.filter(q=>S.ans[q.id]===q.ans).length;
+    const pct = qs.length>0 ? Math.round(feitas/qs.length*100) : 0;
+    const pctAcerto = feitas>0 ? Math.round(acertos/feitas*100) : 0;
+    const concluida = pct >= 20; // fez 20%+ das questões
+    return {feitas, acertos, pct, pctAcerto, concluida, tot:qs.length};
+  }
+
+  // Calcula progresso geral da trilha
+  const statusAll = TRILHA.map(e=>getStatus(e.topico));
+  const totalConcluidas = statusAll.filter(s=>s.concluida).length;
+  const pctTrilha = Math.round(totalConcluidas/TRILHA.length*100);
+
+  $("app").innerHTML=`
+<div style="background:var(--bg);min-height:100vh">
+
+  <!-- Header -->
+  <div class="glass page-header">
+    <div style="font-size:16px;font-weight:800">🎓 Aprender</div>
+    <button onclick="toggleTema()" style="background:var(--bg3);border:1px solid var(--border2);border-radius:10px;padding:7px 10px;font-size:15px">
+      ${document.body.classList.contains("light")?"🌙":"☀️"}
+    </button>
+  </div>
+
+  <div style="padding:0 20px 32px;max-width:480px;margin:0 auto">
+
+    <!-- Progresso geral da trilha -->
+    <div style="padding:20px 0 16px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:10px">
+        <div>
+          <div style="font-size:13px;font-weight:800;margin-bottom:2px">Sua trilha de estudos</div>
+          <div style="font-size:12px;color:var(--text3)">${totalConcluidas} de ${TRILHA.length} etapas concluídas</div>
+        </div>
+        <div style="font-family:var(--mono);font-size:22px;font-weight:900;color:var(--green)">${pctTrilha}%</div>
+      </div>
+      <div class="prog-track" style="height:8px;border-radius:4px">
+        <div class="prog-fill" style="width:${pctTrilha}%;background:var(--green);border-radius:4px"></div>
+      </div>
+    </div>
+
+    <!-- Legenda de níveis -->
+    <div style="display:flex;gap:10px;margin-bottom:24px">
+      ${Object.entries(COR_NIVEL).map(([n,c])=>`
+      <div style="display:flex;align-items:center;gap:5px">
+        <div style="width:10px;height:10px;border-radius:3px;background:${c.bg}"></div>
+        <span style="font-size:11px;color:var(--text3);font-weight:600">${n}</span>
+      </div>`).join("")}
+    </div>
+
+    <!-- TRILHA VISUAL -->
+    <div style="position:relative">
+
+      <!-- Linha vertical conectora -->
+      <div style="position:absolute;left:35px;top:0;bottom:0;width:3px;background:var(--border2);z-index:0"></div>
+
+      ${TRILHA.map((etapa, i)=>{
+        const st = statusAll[i];
+        const info = LICOES[etapa.topico];
+        const cor = COR_NIVEL[etapa.nivel];
+        const prev = i>0 ? statusAll[i-1] : null;
+        // Bloqueia visualmente se a anterior não foi iniciada — mas deixa clicar
+        const sugerida = i===0 || (prev && prev.feitas>0);
+
+        return`
+        <!-- Etapa ${i+1} -->
+        <div style="display:flex;gap:16px;align-items:flex-start;margin-bottom:${i<TRILHA.length-1?"20":"0"}px;position:relative;z-index:1">
+
+          <!-- Ícone da etapa (na linha) -->
+          <div onclick="iniciarLicao(${i})" style="
+            width:56px;height:56px;border-radius:18px;flex-shrink:0;cursor:pointer;
+            background:${st.concluida?"var(--green)":sugerida?info?.cor+"22":"var(--bg3)"};
+            border:3px solid ${st.concluida?"var(--green)":sugerida?info?.cor+"88":"var(--border)"};
+            display:flex;align-items:center;justify-content:center;
+            font-size:${st.concluida?"24":"28"}px;
+            box-shadow:${st.concluida?"0 4px 20px rgba(0,230,118,.3)":sugerida?"0 4px 16px "+info?.cor+"33":"none"};
+            transition:all .2s;
+          ">${st.concluida?"✅":info?.emoji||"📌"}</div>
+
+          <!-- Card da etapa -->
+          <div onclick="iniciarLicao(${i})" style="
+            flex:1;padding:16px 18px;border-radius:18px;cursor:pointer;
+            background:${st.concluida?"var(--green-bg)":sugerida?"var(--bg2)":"var(--bg2)"};
+            border:2px solid ${st.concluida?"var(--green-border)":sugerida?info?.cor+"33":"var(--border)"};
+            transition:all .2s;
+          " onmouseover="this.style.borderColor='${info?.cor||"var(--green)"}'" 
+            onmouseout="this.style.borderColor='${st.concluida?"var(--green-border)":sugerida?info?.cor+"33":"var(--border)"}'">
+
+            <!-- Header do card -->
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="font-size:11px;font-weight:800;padding:3px 9px;border-radius:50px;background:${cor.bg}22;color:${cor.bg === "#ffd740" ? "var(--yellow)" : cor.bg === "#ff6d00" ? "var(--orange)" : "var(--green)"}">
+                  ${etapa.nivel}
+                </span>
+                <span style="font-size:10px;color:var(--text3);font-family:var(--mono)">Etapa ${etapa.seq}</span>
+              </div>
+              ${st.concluida?`<span style="font-size:11px;font-weight:800;color:var(--green);font-family:var(--mono)">${st.pctAcerto}% ✓</span>`:""}
+            </div>
+
+            <!-- Nome -->
+            <div style="font-size:15px;font-weight:800;margin-bottom:4px;color:var(--text)">${etapa.topico}</div>
+
+            <!-- Descrição -->
+            <div style="font-size:12px;color:var(--text3);line-height:1.5;margin-bottom:${st.feitas>0?"10":"0"}px">${etapa.descricao}</div>
+
+            <!-- Barra de progresso (se iniciou) -->
+            ${st.feitas>0?`
+            <div>
+              <div class="prog-track" style="height:5px;border-radius:3px">
+                <div class="prog-fill" style="width:${st.pct}%;background:${info?.cor||"var(--green)"}"></div>
+              </div>
+              <div style="font-size:10px;color:var(--text3);margin-top:4px;font-family:var(--mono)">${st.feitas}/${st.tot} questões · ${st.pct}%</div>
+            </div>`:
+            sugerida?`<div style="font-size:12px;color:${info?.cor||"var(--green)"};font-weight:700;margin-top:6px">▶ ${i===0&&st.feitas===0?"Começar aqui":"Iniciar lição"}</div>`:
+            `<div style="font-size:12px;color:var(--text3);margin-top:4px">Conclua a etapa anterior primeiro (sugerido)</div>`
+            }
+          </div>
+        </div>`;
+      }).join("")}
+    </div>
+
+    <!-- Banner motivacional no fim -->
+    ${totalConcluidas===TRILHA.length?`
+    <div style="margin-top:24px;padding:20px;background:var(--green-bg);border:2px solid var(--green-border);border-radius:20px;text-align:center">
+      <div style="font-size:40px;margin-bottom:8px">🏆</div>
+      <div style="font-size:17px;font-weight:900;color:var(--green);margin-bottom:4px">Trilha completa!</div>
+      <div style="font-size:13px;color:var(--text2)">Você concluiu todas as etapas. Agora pratique com questões reais!</div>
+      <button onclick="navTo(\'quiz-setup\')" class="btn-primary" style="margin-top:16px;padding:14px;font-size:15px">
+        Praticar questões →
+      </button>
+    </div>`:
+    totalConcluidas>0?`
+    <div style="margin-top:24px;padding:16px 18px;background:var(--bg2);border:1px solid var(--border);border-radius:16px;display:flex;align-items:center;gap:12px">
+      <span style="font-size:28px">🎯</span>
+      <div>
+        <div style="font-size:13px;font-weight:800;margin-bottom:2px">Continue de onde parou</div>
+        <div style="font-size:12px;color:var(--text3)">Próxima etapa: <strong style="color:var(--text)">${TRILHA[totalConcluidas]?.topico||TRILHA[0].topico}</strong></div>
+      </div>
+    </div>`:""}
+
+  </div>
+</div>`;
+}
+
+
+function iniciarLicao(idx){
+  S.licaoAtual = TOPICOS_LIST[idx];
+  S.licaoEtapa = 0;
+  S.licaoFlashcard = 0;
+  S.licaoFlipped = false;
+  S.licaoErros = [];
+  // Pega 3 questões aleatórias do banco para fixação
+  const qs = shufl(BANCO.filter(q=>q.topic===S.licaoAtual)).slice(0,3);
+  S.licaoQuestoes = qs;
+  S.licaoQIdx = 0;
+  S.licaoSel = null;
+  S.licaoConf = false;
+  go('licao');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// TELA: LIÇÃO
+// ═══════════════════════════════════════════════════════════════════
+function renderLicao(){
+  const topico = S.licaoAtual;
+  const lic = LICOES[topico];
+  if(!lic){go('aprender');return;}
+
+  const steps = lic.steps;
+  // Total de etapas = steps + questões de fixação
+  const totalEtapas = steps.length + S.licaoQuestoes.length;
+  const etapaAtual = S.licaoEtapa;
+  const prog = Math.round((etapaAtual/totalEtapas)*100);
+
+  // Se já passou de todas as etapas, mostra conclusão
+  if(etapaAtual >= totalEtapas){
+    renderLicaoConclusao();
+    return;
+  }
+
+  // Verifica se é etapa de conteúdo ou questão
+  const ehQuestao = etapaAtual >= steps.length;
+  const qIdx = etapaAtual - steps.length;
+
+  if(ehQuestao){
+    renderLicaoQuestao(lic, qIdx, prog, totalEtapas);
+    return;
+  }
+
+  const step = steps[etapaAtual];
+
+  $('app').innerHTML=`
+<div style="background:var(--bg);min-height:100vh;display:flex;flex-direction:column">
+
+  <!-- Header -->
+  <div style="padding:14px 16px;display:flex;align-items:center;gap:12px;flex-shrink:0">
+    <button onclick="go('aprender')" style="background:none;font-size:22px;line-height:1;border:none;cursor:pointer;color:var(--text3)">✕</button>
+    <div style="flex:1">
+      <div class="prog-track" style="height:8px;border-radius:4px">
+        <div class="prog-fill" style="width:${prog}%;background:${lic.cor};border-radius:4px"></div>
+      </div>
+    </div>
+    <div style="font-family:var(--mono);font-size:12px;color:var(--text3);font-weight:700">${etapaAtual+1}/${totalEtapas}</div>
+  </div>
+
+  <!-- Conteúdo -->
+  <div style="flex:1;overflow-y:auto;padding:16px;max-width:540px;width:100%;margin:0 auto">
+    ${renderStep(step, lic)}
+  </div>
+
+  <!-- Botão Continuar fixo -->
+  <div style="padding:16px;border-top:1px solid var(--border);flex-shrink:0">
+    <button onclick="avancarLicao()" class="btn-primary" style="padding:17px;font-size:16px">
+      ${etapaAtual===totalEtapas-1?'Finalizar lição ✓':'Continuar →'}
+    </button>
+  </div>
+</div>`;
+
+  // Ativa interatividade após render
+  ativarInterativos(step);
+}
+
+function renderStep(step, lic){
+  if(step.tipo==='intro') return renderStepIntro(step, lic);
+  if(step.tipo==='conectivos') return renderStepConectivos(step, lic);
+  if(step.tipo==='regras') return renderStepRegras(step, lic);
+  if(step.tipo==='quantificadores') return renderStepQuantificadores(step, lic);
+  if(step.tipo==='formas') return renderStepFormas(step, lic);
+  if(step.tipo==='passos') return renderStepPassos(step, lic);
+  if(step.tipo==='formulas') return renderStepFormulas(step, lic);
+  if(step.tipo==='conceitos') return renderStepConceitos(step, lic);
+  if(step.tipo==='tabela_condicional') return renderTabelaCondicional(lic);
+  if(step.tipo==='flashcards') return renderStepFlashcards(step, lic);
+  if(step.tipo==='interativo') return renderStepInterativo(step, lic);
+  return `<div>Etapa desconhecida</div>`;
+}
+
+function renderStepIntro(step, lic){
+  return`
+  <div class="fade-up">
+    <div style="text-align:center;margin-bottom:24px">
+      <div style="font-size:64px;margin-bottom:12px">${lic.emoji}</div>
+      <div style="font-size:22px;font-weight:900;margin-bottom:10px">${step.titulo}</div>
+      <p style="font-size:15px;color:var(--text2);line-height:1.7" id="intro-texto">${step.texto}</p>
+    </div>
+    ${step.ok?`
+    <div style="margin-bottom:14px">
+      <div style="font-size:12px;font-weight:800;color:var(--green);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">✅ São proposições:</div>
+      ${step.ok.map(e=>`<div style="padding:10px 14px;background:var(--green-bg);border:1px solid var(--green-border);border-radius:12px;font-size:14px;margin-bottom:6px">${e}</div>`).join('')}
+    </div>
+    <div>
+      <div style="font-size:12px;font-weight:800;color:var(--red);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">❌ Não são proposições:</div>
+      ${step.nao.map(e=>`<div style="padding:10px 14px;background:var(--red-bg);border:1px solid var(--red-border);border-radius:12px;font-size:14px;margin-bottom:6px">${e}</div>`).join('')}
+    </div>`:``}
+  </div>`;
+}
+
+function renderStepConectivos(step, lic){
+  return`
+  <div class="fade-up">
+    <div style="font-size:20px;font-weight:900;margin-bottom:20px">${step.titulo}</div>
+    ${step.items.map(c=>`
+    <div style="display:flex;align-items:center;gap:14px;padding:14px;background:var(--bg2);border:1.5px solid var(--border);border-radius:16px;margin-bottom:10px">
+      <div style="width:48px;height:48px;border-radius:14px;background:${lic.cor}18;border:2px solid ${lic.cor}44;display:flex;align-items:center;justify-content:center;font-size:22px;font-family:var(--mono);font-weight:800;color:${lic.cor};flex-shrink:0">${c.s}</div>
+      <div>
+        <div style="font-size:14px;font-weight:800;margin-bottom:2px">${c.n}</div>
+        <div style="font-family:var(--mono);font-size:12px;color:var(--text3);margin-bottom:3px">${c.ex}</div>
+        <div style="font-size:12px;color:var(--text2)">${c.r}</div>
+      </div>
+    </div>`).join('')}
+  </div>`;
+}
+
+function renderStepRegras(step, lic){
+  return`
+  <div class="fade-up">
+    <div style="font-size:20px;font-weight:900;margin-bottom:20px">${step.titulo}</div>
+    ${step.items.map((r,i)=>`
+    <div style="padding:16px;background:var(--bg2);border:1.5px solid var(--border);border-radius:16px;margin-bottom:10px">
+      <div style="font-size:11px;font-weight:800;color:${lic.cor};text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">${r.t}</div>
+      <div style="font-family:var(--mono);font-size:16px;font-weight:800;margin-bottom:6px;color:var(--text)">${r.f}</div>
+      <div style="font-size:13px;color:var(--text2)">${r.d}</div>
+    </div>`).join('')}
+  </div>`;
+}
+
+function renderStepQuantificadores(step, lic){
+  return`
+  <div class="fade-up">
+    <div style="font-size:20px;font-weight:900;margin-bottom:20px">${step.titulo}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
+      <div style="padding:12px;background:var(--green-bg);border:1.5px solid var(--green-border);border-radius:14px;text-align:center">
+        <div style="font-size:12px;font-weight:800;color:var(--green);margin-bottom:4px">ORIGINAL</div>
+        ${step.items.map(r=>`<div style="font-size:13px;margin-bottom:4px;color:var(--text)">${r.o}</div>`).join('')}
+      </div>
+      <div style="padding:12px;background:var(--red-bg);border:1.5px solid var(--red-border);border-radius:14px;text-align:center">
+        <div style="font-size:12px;font-weight:800;color:var(--red);margin-bottom:4px">NEGAÇÃO</div>
+        ${step.items.map(r=>`<div style="font-size:13px;margin-bottom:4px;color:var(--text)">${r.n}</div>`).join('')}
+      </div>
+    </div>
+    <div style="padding:14px;background:rgba(68,138,255,.08);border:1px solid rgba(68,138,255,.2);border-radius:14px">
+      <div style="font-size:12px;font-weight:800;color:var(--blue);margin-bottom:6px">💡 REGRA DE OURO</div>
+      <div style="font-size:14px;line-height:1.6;color:var(--text2)">Negar um quantificador = trocar <strong>Todo</strong> ↔ <strong>Algum não</strong> e <strong>Algum</strong> ↔ <strong>Nenhum</strong></div>
+    </div>
+  </div>`;
+}
+
+function renderStepFormas(step, lic){
+  return`
+  <div class="fade-up">
+    <div style="font-size:20px;font-weight:900;margin-bottom:20px">${step.titulo}</div>
+    ${step.items.map(f=>`
+    <div style="padding:16px;background:var(--bg2);border:1.5px solid var(--border);border-radius:16px;margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <span style="font-size:20px">${f.e}</span>
+        <span style="font-size:14px;font-weight:800;color:${lic.cor}">${f.n}</span>
+      </div>
+      <div style="font-family:var(--mono);font-size:13px;white-space:pre;color:var(--text2);margin-bottom:8px;padding:10px;background:var(--bg3);border-radius:10px">${f.p}</div>
+      <div style="font-size:12px;color:var(--text3);font-style:italic">${f.ex}</div>
+    </div>`).join('')}
+  </div>`;
+}
+
+function renderStepPassos(step, lic){
+  return`
+  <div class="fade-up">
+    <div style="font-size:20px;font-weight:900;margin-bottom:20px">${step.titulo}</div>
+    ${step.items.map((p,i)=>`
+    <div style="display:flex;gap:14px;margin-bottom:16px">
+      <div style="width:36px;height:36px;border-radius:12px;background:${lic.cor};color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900;flex-shrink:0">${p.n}</div>
+      <div>
+        <div style="font-size:15px;font-weight:800;margin-bottom:4px">${p.t}</div>
+        <div style="font-size:13px;color:var(--text2);line-height:1.6">${p.d}</div>
+      </div>
+    </div>
+    ${i<step.items.length-1?`<div style="width:2px;height:12px;background:var(--border);margin-left:17px;margin-bottom:4px"></div>`:''}`).join('')}
+  </div>`;
+}
+
+function renderStepFormulas(step, lic){
+  return`
+  <div class="fade-up">
+    <div style="font-size:20px;font-weight:900;margin-bottom:20px">${step.titulo}</div>
+    ${step.items.map(f=>`
+    <div style="padding:16px;background:var(--bg2);border:1.5px solid var(--border);border-radius:16px;margin-bottom:10px">
+      <div style="font-size:14px;font-weight:800;color:${lic.cor};margin-bottom:6px">${f.n}</div>
+      <div style="font-family:var(--mono);font-size:14px;padding:10px;background:var(--bg3);border-radius:10px;margin-bottom:8px">${f.f}</div>
+      <div style="display:flex;justify-content:space-between">
+        <span style="font-size:12px;color:var(--text3)">📌 ${f.q}</span>
+        <span style="font-size:12px;color:var(--text2)">Ex: ${f.ex}</span>
+      </div>
+    </div>`).join('')}
+  </div>`;
+}
+
+function renderStepConceitos(step, lic){
+  return`
+  <div class="fade-up">
+    <div style="font-size:20px;font-weight:900;margin-bottom:20px">${step.titulo}</div>
+    ${step.items.map(c=>`
+    <div style="padding:18px;background:var(--bg2);border:2px solid ${c.cor}33;border-radius:16px;margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+        <span style="font-size:28px">${c.e}</span>
+        <span style="font-size:17px;font-weight:900;color:${c.cor}">${c.n}</span>
+      </div>
+      <div style="font-size:14px;color:var(--text2);line-height:1.6;margin-bottom:8px">${c.d}</div>
+      <div style="font-family:var(--mono);font-size:14px;padding:8px 12px;background:${c.cor}12;border-radius:10px;color:${c.cor}">Exemplo: ${c.ex}</div>
+    </div>`).join('')}
+  </div>`;
+}
+
+function renderTabelaCondicional(lic){
+  const linhas=[['V','V','V'],['V','F','F'],['F','V','V'],['F','F','V']];
+  return`
+  <div class="fade-up">
+    <div style="font-size:20px;font-weight:900;margin-bottom:16px">Tabela-Verdade da Condicional</div>
+    <p style="font-size:14px;color:var(--text2);margin-bottom:20px;line-height:1.6">A condicional <strong>p → q</strong> é o conectivo mais cobrado em provas. Memorize: ela só é <strong style="color:var(--red)">FALSA</strong> quando a premissa é verdadeira e a conclusão é falsa.</p>
+    <div style="border-radius:16px;overflow:hidden;border:1.5px solid var(--border)">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;background:${lic.cor}22">
+        ${['p','q','p → q'].map(h=>`<div style="padding:12px;text-align:center;font-family:var(--mono);font-size:16px;font-weight:800;color:${lic.cor}">${h}</div>`).join('')}
+      </div>
+      ${linhas.map(([p,q,r])=>`
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;border-top:1px solid var(--border);background:${r==='F'?'var(--red-bg)':'transparent'}">
+        <div style="padding:12px;text-align:center;font-family:var(--mono);font-size:16px;font-weight:700;color:${p==='V'?'var(--green)':'var(--red)'}">${p}</div>
+        <div style="padding:12px;text-align:center;font-family:var(--mono);font-size:16px;font-weight:700;color:${q==='V'?'var(--green)':'var(--red)'}">${q}</div>
+        <div style="padding:12px;text-align:center;font-family:var(--mono);font-size:18px;font-weight:900;color:${r==='V'?'var(--green)':'var(--red)'}">${r}</div>
+      </div>`).join('')}
+    </div>
+    <div style="margin-top:14px;padding:14px;background:var(--red-bg);border:1px solid var(--red-border);border-radius:14px">
+      <div style="font-size:13px;font-weight:800;color:var(--red);margin-bottom:4px">⚠️ Regra de ouro</div>
+      <div style="font-size:14px;color:var(--text2)">p → q só é <strong>FALSO</strong> quando p = <strong style="color:var(--green)">V</strong> e q = <strong style="color:var(--red)">F</strong></div>
+    </div>
+  </div>`;
+}
+
+function renderStepFlashcards(step, lic){
+  const card = step.cards[S.licaoFlashcard];
+  return`
+  <div class="fade-up">
+    <div style="font-size:20px;font-weight:900;margin-bottom:8px">${step.titulo}</div>
+    <div style="font-size:13px;color:var(--text3);margin-bottom:24px">${S.licaoFlashcard+1} de ${step.cards.length}</div>
+
+    <!-- Card flip -->
+    <div id="flashcard" onclick="flipCard()" style="
+      cursor:pointer;
+      min-height:180px;
+      background:${S.licaoFlipped?lic.cor+'18':'var(--bg2)'};
+      border:2px solid ${S.licaoFlipped?lic.cor+'66':'var(--border2)'};
+      border-radius:24px;padding:28px;
+      display:flex;flex-direction:column;align-items:center;justify-content:center;
+      text-align:center;transition:all .3s;margin-bottom:20px;
+      box-shadow:${S.licaoFlipped?`0 8px 32px ${lic.cor}22`:'none'};
+    ">
+      ${S.licaoFlipped?`
+        <div style="font-size:11px;font-weight:800;color:${lic.cor};text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px">RESPOSTA</div>
+        <div style="font-size:18px;font-weight:700;line-height:1.5;color:var(--text)">${card.v}</div>
+      `:`
+        <div style="font-size:11px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px">PERGUNTA · Toque para revelar</div>
+        <div style="font-size:18px;font-weight:700;line-height:1.5">${card.f}</div>
+        <div style="font-size:28px;margin-top:16px;opacity:.3">👆</div>
+      `}
+    </div>
+
+    <!-- Dots indicadores -->
+    <div style="display:flex;justify-content:center;gap:8px;margin-bottom:20px">
+      ${step.cards.map((_,i)=>`<div style="width:8px;height:8px;border-radius:50%;background:${i===S.licaoFlashcard?lic.cor:'var(--border2)'};transition:background .2s"></div>`).join('')}
+    </div>
+
+    ${S.licaoFlipped?`
+    <div style="display:flex;gap:10px">
+      <button onclick="proximoFlashcard('${step.tipo}','${JSON.stringify(step.cards).replace(/'/g,"&#39;")}',false)" style="flex:1;padding:14px;background:var(--red-bg);border:1.5px solid var(--red-border);border-radius:14px;color:var(--red);font-size:14px;font-weight:700;cursor:pointer;font-family:var(--sans)">😅 Não sabia</button>
+      <button onclick="proximoFlashcard('${step.tipo}','${JSON.stringify(step.cards).replace(/'/g,"&#39;")}',true)" style="flex:1;padding:14px;background:var(--green-bg);border:1.5px solid var(--green-border);border-radius:14px;color:var(--green);font-size:14px;font-weight:700;cursor:pointer;font-family:var(--sans)">🎉 Sabia!</button>
+    </div>`:``}
+  </div>`;
+}
+
+function renderStepInterativo(step, lic){
+  // Para etapa interativa, o botão continuar avança internamente
+  // Usa um estado temporário para saber qual pergunta estamos
+  if(!window._interIdx) window._interIdx=0;
+  if(!window._interSel) window._interSel=null;
+  if(!window._interConf) window._interConf=false;
+
+  const q = step.perguntas[window._interIdx];
+  const totalPergs = step.perguntas.length;
+  const isMulti = !!q.opts;
+
+  return`
+  <div class="fade-up">
+    <div style="font-size:20px;font-weight:900;margin-bottom:6px">${step.titulo}</div>
+    <div style="font-size:13px;color:var(--text3);margin-bottom:24px">Pergunta ${window._interIdx+1} de ${totalPergs}</div>
+
+    <div style="padding:18px;background:var(--bg2);border:1.5px solid var(--border);border-radius:16px;margin-bottom:20px">
+      <p style="font-size:15px;line-height:1.7;font-weight:500">${q.frase}</p>
+    </div>
+
+    ${isMulti?`
+    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
+      ${q.opts.map((opt,oi)=>{
+        let bg='var(--bg2)', border='var(--border)', cor='var(--text)';
+        if(window._interConf){
+          if(oi===q.corr){bg='var(--green-bg)';border='var(--green)';cor='var(--green)';}
+          else if(oi===window._interSel&&oi!==q.corr){bg='var(--red-bg)';border='var(--red)';cor='var(--red)';}
+          else{bg='var(--bg2)';border='var(--border)';cor='var(--text3)';}
+        } else if(window._interSel===oi){
+          bg='rgba(68,138,255,.1)';border='var(--blue)';cor='var(--blue)';
+        }
+        return`<button onclick="${window._interConf?'':'interSelOpt('+oi+')'}" style="
+          padding:14px 16px;border-radius:14px;border:2px solid ${border};
+          background:${bg};color:${cor};font-size:14px;font-weight:600;
+          text-align:left;cursor:${window._interConf?'default':'pointer'};
+          transition:all .2s;font-family:var(--sans);width:100%;
+        ">${opt}</button>`;
+      }).join('')}
+    </div>`:``}
+
+    ${window._interConf?`
+    <div style="padding:14px 16px;border-radius:14px;background:${window._interSel===q.corr?'var(--green-bg)':'var(--red-bg)'};border:1.5px solid ${window._interSel===q.corr?'var(--green-border)':'var(--red-border)'};margin-bottom:16px">
+      <div style="font-size:13px;font-weight:800;color:${window._interSel===q.corr?'var(--green)':'var(--red)'};margin-bottom:4px">${window._interSel===q.corr?'✅ Correto!':'❌ Incorreto'}</div>
+      <div style="font-size:13px;color:var(--text2);line-height:1.6">${q.exp}</div>
+    </div>
+    <button onclick="avancarInterativo(${totalPergs})" class="btn-primary" style="padding:16px">
+      ${window._interIdx<totalPergs-1?'Próxima pergunta →':'Continuar →'}
+    </button>
+    `:
+    window._interSel!==null?`<button onclick="confirmarInterativo()" class="btn-primary" style="padding:16px">Confirmar</button>`:
+    `<div style="text-align:center;font-size:13px;color:var(--text3);padding:8px">Selecione uma opção acima</div>`}
+  </div>`;
+}
+
+function interSelOpt(idx){window._interSel=idx;renderLicao();}
+function confirmarInterativo(){window._interConf=true;renderLicao();}
+function avancarInterativo(total){
+  if(window._interIdx<total-1){
+    window._interIdx++;window._interSel=null;window._interConf=false;renderLicao();
+  } else {
+    window._interIdx=0;window._interSel=null;window._interConf=false;
+    avancarLicao();
+  }
+}
+
+function flipCard(){S.licaoFlipped=!S.licaoFlipped;renderLicao();}
+function proximoFlashcard(tipo, cardsStr, sabia){
+  S.licaoFlipped=false;
+  const cards=JSON.parse(cardsStr.replace(/&#39;/g,"'"));
+  if(S.licaoFlashcard<cards.length-1){
+    S.licaoFlashcard++;
+    renderLicao();
+  } else {
+    S.licaoFlashcard=0;
+    avancarLicao();
+  }
+}
+
+function avancarLicao(){
+  const lic=LICOES[S.licaoAtual];
+  const totalEtapas=lic.steps.length+S.licaoQuestoes.length;
+  S.licaoFlipped=false;
+  window._interIdx=0;window._interSel=null;window._interConf=false;
+  if(S.licaoEtapa<totalEtapas-1){S.licaoEtapa++;renderLicao();}
+  else renderLicaoConclusao();
+}
+
+function ativarInterativos(step){
+  // Hook para botão continuar na etapa interativa (desativa o botão padrão)
+  if(step.tipo==='interativo'||step.tipo==='flashcards'){
+    // O botão continuar não aparece — eles têm seu próprio fluxo
+    const btnCont=document.querySelector('.btn-primary[onclick="avancarLicao()"]');
+    if(btnCont&&(step.tipo==='flashcards'||step.tipo==='interativo'))btnCont.style.display='none';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// QUESTÕES DE FIXAÇÃO DA LIÇÃO
+// ═══════════════════════════════════════════════════════════════════
+function renderLicaoQuestao(lic, qIdx, prog, total){
+  const q = S.licaoQuestoes[qIdx];
+  if(!q){avancarLicao();return;}
+  const isOk = S.licaoConf && S.licaoSel===q.ans;
+  const correto = q.opts.find(o=>o.l===q.ans);
+
+  $('app').innerHTML=`
+<div style="background:var(--bg);min-height:100vh;display:flex;flex-direction:column">
+
+  <!-- Header -->
+  <div style="padding:14px 16px;display:flex;align-items:center;gap:12px;flex-shrink:0">
+    <button onclick="go('aprender')" style="background:none;font-size:22px;line-height:1;border:none;cursor:pointer;color:var(--text3)">✕</button>
+    <div style="flex:1">
+      <div class="prog-track" style="height:8px;border-radius:4px">
+        <div class="prog-fill" style="width:${prog}%;background:${lic.cor};border-radius:4px"></div>
+      </div>
+    </div>
+    <div style="font-family:var(--mono);font-size:12px;color:var(--text3)">Fixação ${qIdx+1}/${S.licaoQuestoes.length}</div>
+  </div>
+
+  <div style="flex:1;overflow-y:auto;padding:16px;max-width:540px;width:100%;margin:0 auto">
+
+    <!-- Badge fixação -->
+    <div style="display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:50px;background:${lic.cor}18;border:1px solid ${lic.cor}44;font-size:11px;font-weight:800;color:${lic.cor};text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px">
+      ${lic.emoji} Fixação · ${S.licaoAtual}
+    </div>
+
+    <!-- Enunciado -->
+    <div class="card" style="padding:18px;margin-bottom:14px">
+      <div style="font-size:10px;color:var(--text3);font-weight:600;text-transform:uppercase;margin-bottom:8px">${esc(q.src)}</div>
+      <p style="font-size:14px;line-height:1.75;white-space:pre-wrap">${esc(q.text)}</p>
+    </div>
+
+    <!-- Alternativas -->
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">
+      ${q.opts.map(o=>{
+        const isAns=o.l===q.ans,isSel=S.licaoSel===o.l;
+        let cls='alt';
+        if(!S.licaoConf&&isSel)cls+=' sel';
+        if(S.licaoConf&&isAns)cls+=' corr';
+        else if(S.licaoConf&&isSel&&!isAns)cls+=' err';
+        else if(S.licaoConf&&!isAns&&!isSel)cls+=' dim';
+        const icon=S.licaoConf&&isAns?'✓':S.licaoConf&&isSel&&!isAns?'✕':o.l;
+        return`<button class="${cls}" onclick="${S.licaoConf?'':'licaoSelAlt(\''+o.l+'\')'}" ${S.licaoConf?'disabled':''}>
+          <span class="alt-letra">${icon}</span>
+          <span style="font-size:14px;line-height:1.65;text-align:left">${esc(o.t)}</span>
+        </button>`;
+      }).join('')}
+    </div>
+
+    <!-- Feedback -->
+    ${S.licaoConf?`
+    <div style="padding:14px 16px;border-radius:14px;background:${isOk?'var(--green-bg)':'var(--red-bg)'};border:1.5px solid ${isOk?'var(--green-border)':'var(--red-border)'};margin-bottom:14px" class="fade-up">
+      <div style="font-size:14px;font-weight:800;color:${isOk?'var(--green)':'var(--red)'};margin-bottom:${q.exp?.ok?'6':'0'}px">${isOk?'✅ Correto!':'❌ Gabarito: '+q.ans+') '+(correto?.t?.substring(0,40)||'')}</div>
+      ${q.exp?.ok?`<p style="font-size:13px;line-height:1.65;color:var(--text2)">${esc(q.exp.ok)}</p>`:''}
+    </div>`:``}
+
+    <div style="height:90px"></div>
+  </div>
+
+  <!-- Botão fixo -->
+  <div style="position:fixed;bottom:0;left:0;right:0;padding:16px;background:var(--bg);border-top:1px solid var(--border)">
+    ${!S.licaoConf?`
+    <button onclick="licaoConfirmar()" ${!S.licaoSel?'disabled':''} class="btn-primary" style="padding:17px;font-size:16px;opacity:${S.licaoSel?1:.4}">
+      Confirmar
+    </button>`:`
+    <button onclick="licaoAvancar(${qIdx})" class="btn-primary" style="padding:17px;font-size:16px;background:${lic.cor}">
+      ${qIdx<S.licaoQuestoes.length-1?'Próxima →':'Ver resultado →'}
+    </button>`}
+  </div>
+</div>`;
+}
+
+function licaoSelAlt(l){S.licaoSel=l;renderLicao();}
+function licaoConfirmar(){
+  if(!S.licaoSel)return;
+  S.licaoConf=true;
+  const q=S.licaoQuestoes[S.licaoQIdx];
+  const ok=S.licaoSel===q.ans;
+  if(ok)showFeedback(true);
+  else{showFeedback(false);S.licaoErros.push(q);}
+  // Salva no progresso global também
+  S.ans[q.id]=ok?q.ans:'__errado__';
+  salvarResposta(q.id,ok);
+  renderLicao();
+}
+function licaoAvancar(qIdx){
+  S.licaoQIdx++;S.licaoSel=null;S.licaoConf=false;
+  S.licaoEtapa++;renderLicao();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CONCLUSÃO DA LIÇÃO
+// ═══════════════════════════════════════════════════════════════════
+function renderLicaoConclusao(){
+  const lic=LICOES[S.licaoAtual];
+  const total=S.licaoQuestoes.length;
+  const erros=S.licaoErros.length;
+  const acertos=total-erros;
+  const pct=total>0?Math.round(acertos/total*100):100;
+
+  $('app').innerHTML=`
+<div style="background:var(--bg);min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px 24px;text-align:center">
+
+  <div style="font-size:80px;margin-bottom:16px;animation:celebrate .8s ease both">${pct===100?'🏆':pct>=66?'🎉':'💪'}</div>
+
+  <div style="font-family:var(--display);font-size:28px;font-weight:900;margin-bottom:8px">
+    ${pct===100?'Perfeito!':pct>=66?'Muito bem!':'Continue praticando!'}
+  </div>
+
+  <div style="font-size:16px;color:var(--text2);margin-bottom:32px">${S.licaoAtual} concluído</div>
+
+  <!-- Stats -->
+  <div style="display:flex;gap:20px;margin-bottom:32px">
+    <div style="text-align:center;padding:16px 24px;background:var(--green-bg);border:1.5px solid var(--green-border);border-radius:20px">
+      <div style="font-family:var(--mono);font-size:32px;font-weight:900;color:var(--green)">${acertos}</div>
+      <div style="font-size:12px;color:var(--green);font-weight:700;margin-top:4px">ACERTOS</div>
+    </div>
+    ${erros>0?`<div style="text-align:center;padding:16px 24px;background:var(--red-bg);border:1.5px solid var(--red-border);border-radius:20px">
+      <div style="font-family:var(--mono);font-size:32px;font-weight:900;color:var(--red)">${erros}</div>
+      <div style="font-size:12px;color:var(--red);font-weight:700;margin-top:4px">ERROS</div>
+    </div>`:''}
+    <div style="text-align:center;padding:16px 24px;background:rgba(255,215,64,.1);border:1.5px solid rgba(255,215,64,.25);border-radius:20px">
+      <div style="font-family:var(--mono);font-size:32px;font-weight:900;color:var(--yellow)">${acertos*10}</div>
+      <div style="font-size:12px;color:var(--yellow);font-weight:700;margin-top:4px">XP</div>
+    </div>
+  </div>
+
+  <div style="width:100%;max-width:360px;display:flex;flex-direction:column;gap:10px">
+    <button onclick="navTo('quiz-setup')" class="btn-primary" style="padding:16px;font-size:16px">
+      Praticar mais ${lic.emoji} ${S.licaoAtual} →
+    </button>
+    <button onclick="go('aprender')" class="btn-secondary" style="padding:14px">
+      ← Voltar às lições
+    </button>
+  </div>
+</div>`;
+}
+</script>
